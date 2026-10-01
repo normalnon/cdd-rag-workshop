@@ -6,7 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+# override=True: ค่าใน .env ชนะตัวแปรที่ export ค้างไว้ใน shell (เช่น STUDENT=00 จาก .env ของคนอื่น)
+load_dotenv(ROOT / ".env", override=True)
 
 
 @dataclass(frozen=True)

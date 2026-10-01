@@ -5,7 +5,7 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 # สร้างใหม่ได้ด้วย scripts/prepare_tydi.py
-data/tydi/
+data/tydi/*.snapshot
 *.swp
 
 # ไฟล์ล็อกชั่วคราวของ Office

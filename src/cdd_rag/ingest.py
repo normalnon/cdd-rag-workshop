@@ -16,6 +16,9 @@ from .sparse import SPARSE_PIPELINE
 _THAI_MARKS = "ัิ-ฺ็-๎"
 _SPACE_BEFORE_MARK = re.compile(rf" +([{_THAI_MARKS}]+) ?")
 _SPACE_BEFORE_AM = re.compile(r" +ำ")
+_BROKEN_AM = re.compile(r"([ก-ฮ][่-๋]?) า")
+_MAI_EK_AA = re.compile(r"([ก-ฮ])่า")
+_THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
 
 def has_broken_sara_aa(text: str) -> bool:
@@ -24,17 +27,67 @@ def has_broken_sara_aa(text: str) -> bool:
     return text.count("ำ") > 5 and text.count("า") == 0
 
 
+def _swap_sara_aa(text: str) -> str:
+    # ำ จริงมีช่องว่างนำหน้า ("ก ำหนด") ส่วน ำ ที่ไม่มีช่องว่างคือ า ที่ถูกแปลงผิด ("กำร")
+    text = _SPACE_BEFORE_AM.sub("\x00", text)
+    return text.replace("ำ", "า").replace("\x00", "ำ")
+
+
+def _wordiness(text: str) -> tuple[int, int]:
+    """ใช้ตัดสินว่าข้อความแบบไหน "อ่านเป็นคำ" มากกว่า (ค่าน้อยกว่า = ดีกว่า)
+    1) จำนวนตัวอักษรที่ไม่อยู่ในพจนานุกรม  2) จำนวนชิ้นที่ตัดได้ (คำจริงมักตัดได้เป็นชิ้นยาว ๆ น้อยชิ้น)
+    เช่น "สำหรับ" ได้ 1 ชิ้น แต่ "ส่า|หรับ" ได้ 2 ชิ้น · "ป่าไม้" 1 ชิ้น แต่ "ปำ|ไม้" 2 ชิ้น"""
+    from pythainlp.corpus import thai_words
+    from pythainlp.tokenize import word_tokenize
+
+    words = thai_words()
+    tokens = [w for w in word_tokenize(text, engine="newmm") if w.strip()]
+    return sum(len(w) for w in tokens if w not in words), len(tokens)
+
+
+def _fix_mai_ek_aa(line: str) -> str:
+    pos = 0
+    while (m := _MAI_EK_AA.search(line, pos)) is not None:
+        alt = line[: m.start()] + m.group(1) + "ำ" + line[m.end():]
+        if _wordiness(alt) < _wordiness(line):
+            line = alt
+        pos = m.start() + 1
+    return line
+
+
+def _fix_mixed_lines(text: str) -> str:
+    """บางเอกสารใช้หลายฟอนต์ในหน้าเดียว อาการ า→ำ จึงเกิดแค่บางบรรทัด (เช่น สารบัญ)
+    ลองแปลงทีละบรรทัด แล้วเก็บแบบที่ประกอบเป็นคำในพจนานุกรมได้มากกว่า
+    ("เวลำ" → "เวลา" เพราะเป็นคำ · "ทำ" กับ "ทา" เป็นคำทั้งคู่ จึงคงไว้ตามเดิม)"""
+    out = []
+    for line in text.split("\n"):
+        if "ำ" in line and "า" not in line:
+            alt = _swap_sara_aa(line)
+            if _wordiness(alt) < _wordiness(_SPACE_BEFORE_AM.sub("ำ", line)):
+                line = alt
+        # อีกอาการ: ำ ถูกดึงเป็น "่า" ("ส่าหรับ" "ก่าหนด") แทนตรง ๆ ไม่ได้เพราะ "ป่า" "ว่า" เป็นคำจริง
+        # ตัดสินทีละจุด บรรทัดเดียวกันจึงแก้ "ส่าหรับ" ได้โดยไม่ทำให้ "ป่าไม้" พัง
+        if "่า" in line:
+            line = _fix_mai_ek_aa(line)
+        out.append(line)
+    return "\n".join(out)
+
+
 def normalize_thai(text: str) -> str:
     if has_broken_sara_aa(text):
-        # ำ จริงมีช่องว่างนำหน้า ("ก ำหนด") ส่วน ำ ที่ไม่มีช่องว่างคือ า ที่ถูกแปลงผิด ("กำร")
-        text = _SPACE_BEFORE_AM.sub("\x00", text)
-        text = text.replace("ำ", "า").replace("\x00", "ำ")
+        text = _swap_sara_aa(text)        # ทั้งหน้าเป็นฟอนต์ที่พัง
     else:
+        text = _fix_mixed_lines(text)     # บางบรรทัดพัง
         text = _SPACE_BEFORE_AM.sub("ำ", text)
     # "นนทบุร ี", "เร ี ยน" → "นนทบุรี", "เรียน"
     text = _SPACE_BEFORE_MARK.sub(r"\1", text)
     # นิคหิต + า ที่แยกกัน → ำ
     text = text.replace("ํา", "ำ")
+    # อีกอาการหนึ่ง: นิคหิตหายไปเหลือ "ด าเนิน" "ส าหรับ" "น้ า" → ดำเนิน สำหรับ น้ำ
+    # ปลอดภัยเพราะสระ า ไม่มีทางขึ้นต้นคำ พยัญชนะ (+วรรณยุกต์) + ช่องว่าง + า จึงต้องเป็น ำ ที่พัง
+    text = _BROKEN_AM.sub(r"\1ำ", text)
+    # เลขไทย → เลขอารบิก ผู้ใช้ส่วนใหญ่พิมพ์ "2551" ไม่ใช่ "๒๕๕๑" (ค้นแบบจับคำจะได้เจอ)
+    text = text.translate(_THAI_DIGITS)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r" *\n *", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -186,7 +239,7 @@ def chunk_pdf(path: Path, chunk_size: int = 600, overlap: int = 120, meta: dict 
         "version": PIPELINE_VERSION,
         "chunk_size": chunk_size,
         "overlap": overlap,
-        "normalizer": "thai-v1",
+        "normalizer": "thai-v6",
         "sparse": SPARSE_PIPELINE,
     }
     now = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")

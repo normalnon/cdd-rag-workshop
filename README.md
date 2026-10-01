@@ -1,5 +1,15 @@
 # CDD RAG & Agent Workshop (1–2 ต.ค. 2569)
 
+## ดาวน์โหลด
+
+```bash
+git clone <URL ของ repo> cdd-rag
+cd cdd-rag
+```
+
+- รันบนเครื่องตัวเอง (Mac / Windows) โดยใช้ LLM, bge-m3 และ Qdrant บน server ผ่าน SSH tunnel: ดู [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)
+- รันบน server ผ่าน VS Code Remote-SSH: ดูหัวข้อ "เริ่มใช้งาน (ผู้เรียน)" ด้านล่าง
+
 ```
 src/cdd_rag/      โค้ดจริง (notebook, agent, service import จากที่นี่)
   config.py       อ่าน .env
@@ -69,6 +79,7 @@ uv run python scripts/index_tydi.py       # โหลด Mr. TyDi สำหร�
 | `check_env` บอกว่า `.env ยังมี XX` | แก้ไม่ครบ | แก้ทุกบรรทัดที่บอก |
 | `invalid ... port` ตอน `docker compose up` | ยังเหลือ `163XX` | ใส่เลข เช่น `16307` |
 | `address already in use` | เลขซ้ำกับคนอื่น | ตรวจเลขประจำตัวใน `.env` |
+| `uv sync`: `failed to canonicalize path ... .venv/bin/python: Permission denied` | `.venv` ของคนอื่นติดมาตอน cp | `rm -rf .venv && uv sync` |
 | notebook: `No module named 'cdd_rag'` | kernel ไม่ใช่ `.venv` ของโปรเจกต์ | เลือก kernel ใหม่ตามขั้นข้างบน แล้ว Restart |
 | `permission denied ... docker.sock` | user ไม่อยู่ในกลุ่ม docker | แจ้งผู้สอน |
 | Qdrant ✘ `Unauthorized` | `QDRANT_API_KEY` ใน `.env` ไม่ตรงกับตอนเปิด container | แก้ `.env` แล้ว `docker compose up -d` ใหม่ |

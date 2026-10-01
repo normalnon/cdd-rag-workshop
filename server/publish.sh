@@ -15,7 +15,9 @@ if [ ! -f data/tydi/tydi_th_bge_m3.snapshot ]; then
 fi
 
 # ไม่ส่ง: .env / .venv ของผู้สอน · ไฟล์ที่ผู้สอนใช้คนเดียว (bge-m3 ตัวกลาง, เตรียม TyDi, pack) · ไฟล์สำหรับเครื่อง dev
-rsync -a --delete \
+# --delete-excluded: ลบของที่ไม่ควรมีออกจากปลายทางด้วย (เช่น .venv ที่หลุดเข้าไปรอบก่อน)
+# ถ้าไม่ใส่ rsync จะไม่ copy .venv แต่ก็ไม่ลบ .venv เดิม ผู้เรียน cp ไปแล้ว uv sync จะฟ้อง Permission denied
+rsync -a --delete --delete-excluded \
   --exclude .env --exclude .venv --exclude __pycache__ --exclude .ipynb_checkpoints \
   --exclude Makefile --exclude .gitignore --exclude monitoring \
   --exclude server/ \
