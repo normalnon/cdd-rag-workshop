@@ -41,7 +41,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 **ทาง ก ดาวน์โหลดจาก git** (ได้ไฟล์ชุดล่าสุด)
 
 ```bash
-git clone <URL ของ repo> cdd-rag
+git clone https://github.com/normalnon/cdd-rag-workshop.git cdd-rag
 cd cdd-rag
 cp .env.example .env        # Windows: copy .env.example .env
 uv sync

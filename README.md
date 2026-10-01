@@ -3,7 +3,7 @@
 ## ดาวน์โหลด
 
 ```bash
-git clone <URL ของ repo> cdd-rag
+git clone https://github.com/normalnon/cdd-rag-workshop.git cdd-rag
 cd cdd-rag
 ```
 
