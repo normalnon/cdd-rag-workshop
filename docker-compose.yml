@@ -1,0 +1,23 @@
+# Qdrant ของแต่ละคน — ทุกคนรันชุดของตัวเองบน server เดียวกัน
+#   cp .env.example .env   แล้วแก้ XX เป็นเลขประจำตัว
+#   docker compose up -d
+#
+# ชื่อ project = cdd-rag-<เลข> → container / volume แยกกันต่อคน ไม่ชนกัน
+# embedding (bge-m3) ไม่อยู่ในไฟล์นี้ ใช้ตัวกลางตัวเดียวที่ผู้สอนเปิดไว้
+name: cdd-rag-${STUDENT:?ยังไม่มี .env — cp .env.example .env แล้วแก้ XX}
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.1   # ตรงกับ qdrant-client 1.19
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 = เปิดเฉพาะในเครื่อง server · เข้าจากข้างนอกผ่าน SSH / VS Code port forwarding เท่านั้น
+      # (ถ้าเขียนแค่ "6333:6333" Docker จะเปิดให้ทุก network และข้าม firewall ufw ไปด้วย)
+      - "127.0.0.1:${QDRANT_PORT:?ตั้ง QDRANT_PORT ใน .env}:6333"
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  qdrant_data:

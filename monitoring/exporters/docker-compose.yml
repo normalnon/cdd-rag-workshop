@@ -1,0 +1,51 @@
+# exporter ที่เปิด /metrics ให้ของที่ไม่มี /metrics เอง: ตัวเครื่อง server และ container ทุกตัว
+# ผู้สอนรันชุดเดียวบน server แล้วผู้เรียนทุกคนเพิ่ม target ใน prometheus.yml ของตัวเอง
+# (ถ้าทุกคนรันเอง port 9100 / 18080 จะชนกัน)
+#
+#   cd monitoring/exporters && docker compose up -d
+#   curl -s 127.0.0.1:9100/metrics | grep -m 3 ^node_
+#   curl -s 127.0.0.1:18080/metrics | grep -m 3 ^container_
+#   curl -s '127.0.0.1:19115/probe?module=http_2xx&target=http://127.0.0.1:8080/docs' | grep ^probe_success
+name: exporters
+
+services:
+  # CPU / RAM / disk / network ของ server
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+    volumes:
+      - /:/host:ro
+
+  # เช็กสถานะ service ที่ไม่มี /metrics: ยิง HTTP (http_2xx) หรือเช็กว่า port เปิดอยู่ (tcp_connect)
+  # Prometheus เรียก 127.0.0.1:19115/probe?target=...&module=... แล้วได้ probe_success = 1 / 0
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml     # config ที่มากับ image มี http_2xx, tcp_connect อยู่แล้ว
+      - --web.listen-address=127.0.0.1:19115
+
+  # CPU / RAM / network ของแต่ละ container
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    network_mode: host
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --port=18080
+      - --listen_ip=127.0.0.1
+      - --docker_only=true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg

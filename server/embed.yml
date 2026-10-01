@@ -1,0 +1,28 @@
+# ผู้สอนรันชุดเดียว: bge-m3 บน vLLM ให้ทุกคนใช้ร่วมกันที่ 127.0.0.1:8001
+#   docker compose -f server/embed.yml up -d
+#   curl -s 127.0.0.1:8001/v1/models      # ต้องเห็น BAAI/bge-m3
+#
+# ไม่ให้ผู้เรียนรันเอง: คนละตัวใช้ GPU ~14 GB (0.10 × H200) × 13 คน เกินที่ server เหลือ
+name: cdd-embed
+
+services:
+  embed:
+    image: vllm/vllm-openai:v0.23.0   # รุ่นเดียวกับ vllm-server ที่มีอยู่แล้ว (image อยู่ในเครื่องแล้ว ไม่ต้อง pull ใหม่)
+    restart: unless-stopped
+    command: >
+      --model BAAI/bge-m3
+      --served-model-name BAAI/bge-m3
+      --gpu-memory-utilization ${EMBED_GPU_UTIL:-0.10}
+      --max-model-len 8192
+    ports:
+      - "127.0.0.1:${EMBED_PORT:-8001}:8000"
+    volumes:
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

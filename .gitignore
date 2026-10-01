@@ -1,0 +1,12 @@
+.venv
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+# สร้างใหม่ได้ด้วย scripts/prepare_tydi.py
+data/tydi/
+*.swp
+
+# ไฟล์ล็อกชั่วคราวของ Office
+~$*

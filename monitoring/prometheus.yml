@@ -1,0 +1,99 @@
+# Prometheus ไปดึง (scrape) /metrics ของแต่ละ service ทุก 15 วินาที
+# target = 127.0.0.1:<port ที่ service เปิดบน server>  (ใช้ 127.0.0.1 ได้เพราะ stack นี้ใช้ network_mode: host)
+#   หา port:        docker ps --format 'table {{.Names}}\t{{.Ports}}'   (เลขซ้ายของ ->)
+#                   ถ้าช่อง PORTS ว่าง (container ใช้ host network) ดู: ss -tlnp
+#   ทดสอบก่อนใส่:   curl -s 127.0.0.1:<port>/metrics | head
+#   แก้ไฟล์แล้ว:     curl -X POST 127.0.0.1:<PROMETHEUS_PORT>/-/reload
+# ป้าย service: ... คือชื่อที่จะขึ้นบน dashboard
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # ---------- 1) service ที่มี /metrics: ดึงตรงได้ทั้งสถานะและตัวเลข ----------
+  - job_name: vllm
+    metrics_path: /metrics                # ค่าเริ่มต้นอยู่แล้ว เขียนไว้ให้เห็นว่าเปลี่ยนได้
+    static_configs:
+      - targets: ["127.0.0.1:8000"]
+        labels: { service: vllm-server }
+
+  # ---------- 2) service ที่ไม่มี /metrics: ให้ blackbox-exporter ช่วยเช็ก ----------
+  # blackbox (127.0.0.1:19115) ผู้สอนรันชุดเดียวจาก exporters/ · ผลคือ probe_success = 1 (ตอบ) / 0 (ไม่ตอบ)
+  # relabel 3 บรรทัดล่าง = ส่ง target ไปเป็นพารามิเตอร์ให้ blackbox แทนที่จะดึงจาก target ตรง ๆ
+
+  # ยิง HTTP แล้วต้องได้ 2xx (service พวกนี้ตอบที่ /docs)
+  - job_name: service-http
+    metrics_path: /probe
+    params: { module: [http_2xx] }
+    static_configs:
+      - targets: ["http://127.0.0.1:8002/docs"]
+        labels: { service: hidream-server }
+      - targets: ["http://127.0.0.1:8003/docs"]
+        labels: { service: tts-server }
+      - targets: ["http://127.0.0.1:8080/docs"]
+        labels: { service: rag-engine }
+    relabel_configs:
+      - { source_labels: [__address__], target_label: __param_target }
+      - { source_labels: [__param_target], target_label: instance }
+      - { target_label: __address__, replacement: "127.0.0.1:19115" }
+
+  # ไม่มี path ไหนตอบ 2xx → เช็กแค่ว่า port เปิดรับการเชื่อมต่อ
+  - job_name: service-tcp
+    metrics_path: /probe
+    params: { module: [tcp_connect] }
+    static_configs:
+      - targets: ["127.0.0.1:8011"]
+        labels: { service: aigeo-analyzer-v2 }
+    relabel_configs:
+      - { source_labels: [__address__], target_label: __param_target }
+      - { source_labels: [__param_target], target_label: instance }
+      - { target_label: __address__, replacement: "127.0.0.1:19115" }
+
+  # ---------- 3) ตัวอย่างอื่น: เอา # ออกเมื่อจะใช้ (เอาออกเฉพาะบรรทัด YAML · VS Code: เลือกแล้ว Ctrl + /) ----------
+
+  # Prometheus ของตัวเอง · ใส่ PROMETHEUS_PORT ของตัวเอง
+  # - job_name: prometheus
+  #   static_configs:
+  #     - targets: ["127.0.0.1:19097"]
+  #       labels: { service: prometheus }
+
+  # node-exporter: CPU / RAM / disk / network ของ server · ผู้สอนรันชุดเดียว (ดู exporters/)
+  # - job_name: node
+  #   static_configs:
+  #     - targets: ["127.0.0.1:9100"]
+  #       labels: { service: server }
+
+  # cAdvisor: CPU / RAM / network ของแต่ละ container · ผู้สอนรันชุดเดียว (ดู exporters/)
+  # - job_name: cadvisor
+  #   static_configs:
+  #     - targets: ["127.0.0.1:18080"]
+  #       labels: { service: containers }
+
+  # Qdrant (vector DB ของ RAG) · ถ้าตั้ง API key ไว้ /metrics ต้องแนบ key ไม่งั้นได้ 401
+  #   1) สร้างไฟล์ secrets/qdrant_api_key ใส่ key บรรทัดเดียว แล้ว chmod 644
+  #      (Prometheus ใน container รันเป็น user nobody ถ้า 600 จะอ่านไม่ได้ → 401)
+  #      ไฟล์ 644 คนอื่นบน server อ่านได้ → ใช้ read-only key ของ Qdrant (QDRANT__SERVICE__READ_ONLY_API_KEY)
+  #   2) เปิดบรรทัด mount ./secrets ใน docker-compose.yml แล้ว docker compose up -d
+  # - job_name: qdrant
+  #   authorization:
+  #     type: Bearer
+  #     credentials_file: /etc/prometheus/secrets/qdrant_api_key
+  #   static_configs:
+  #     - targets: ["127.0.0.1:6333"]
+  #       labels: { service: qdrant }
+
+  # app ที่เขียนเอง: ใส่ prometheus-fastapi-instrumentator ให้ FastAPI เปิด /metrics แล้วดึงตรงได้
+  # - job_name: rag-api
+  #   static_configs:
+  #     - targets: ["127.0.0.1:8088"]
+  #       labels: { service: rag-api }
+
+  # service ที่ path ไม่ใช่ /metrics และต้อง login (ตัวอย่าง haproxy) · ยังไม่ได้ทดสอบกับ haproxy จริง
+  #   รหัสเก็บในไฟล์ secrets/haproxy_password (chmod 644) ไม่เขียนลงไฟล์นี้
+  # - job_name: haproxy
+  #   metrics_path: /_metrics
+  #   basic_auth:
+  #     username: admin
+  #     password_file: /etc/prometheus/secrets/haproxy_password
+  #   static_configs:
+  #     - targets: ["127.0.0.1:80"]
+  #       labels: { service: haproxy }

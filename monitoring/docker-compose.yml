@@ -1,0 +1,43 @@
+# Monitoring stack ของผู้เรียนแต่ละคน: Prometheus + Grafana
+# รันแยกจากระบบอื่นได้เลย ไม่ต้องแก้ compose ของ service ที่จะ monitor
+#
+# network_mode: host = ใช้ network ของ server โดยตรง
+#   → Prometheus ดึง /metrics จากทุก service บนเครื่องได้ด้วย 127.0.0.1:<port>
+#   → ทุกคนใช้ server เดียวกัน จึงต้องใช้ port ไม่ซ้ำกัน (ตั้งใน .env)
+#
+#   cp .env.example .env   แล้วแก้เลขประจำตัว / port / รหัสผ่าน
+#   docker compose up -d
+name: monitor-${STUDENT:?ตั้ง STUDENT ใน .env ก่อน}
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.listen-address=127.0.0.1:${PROMETHEUS_PORT:?ตั้ง PROMETHEUS_PORT ใน .env}
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle          # reload config ได้โดยไม่ต้อง restart
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+      # เปิดเมื่อ target ต้องใช้ key / รหัส (เช่น qdrant, haproxy ใน prometheus.yml)
+      # - ./secrets:/etc/prometheus/secrets:ro
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      GF_SERVER_HTTP_ADDR: 127.0.0.1
+      GF_SERVER_HTTP_PORT: ${GRAFANA_PORT:?ตั้ง GRAFANA_PORT ใน .env}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?ตั้ง GRAFANA_PASSWORD ใน .env}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on: [prometheus]
+
+volumes:
+  prometheus_data:
+  grafana_data:
