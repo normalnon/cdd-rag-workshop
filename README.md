@@ -2,13 +2,22 @@
 
 ## ดาวน์โหลด
 
+ผู้เรียนรันบนเครื่องตัวเอง (Mac / Windows) ทำตาม **[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)** ทีละขั้น ห้ามข้าม
+
 ```bash
 git clone https://github.com/normalnon/cdd-rag-workshop.git cdd-rag
 cd cdd-rag
+uv sync                                   # สร้าง .venv ก่อนทำอย่างอื่น
+cp .env.example .env                      # แก้ XX + ตั้ง QDRANT_API_KEY
+docker compose up -d                      # Qdrant บนเครื่องเรา (ต้องเปิด Docker Desktop)
+# อีกหน้าต่าง เปิดค้างไว้: ssh -N -L 8000:127.0.0.1:8000 -L 8001:127.0.0.1:8001 cddXX@<IP server>
+uv run python scripts/check_env.py        # ต้องถูกครบ 3 บรรทัด
+uv run python scripts/index_tydi.py       # ข้อมูล Lab 02
 ```
 
-- รันบนเครื่องตัวเอง (Mac / Windows) โดยใช้ LLM, bge-m3 และ Qdrant บน server ผ่าน SSH tunnel: ดู [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)
-- รันบน server ผ่าน VS Code Remote-SSH: ดูหัวข้อ "เริ่มใช้งาน (ผู้เรียน)" ด้านล่าง
+Qdrant อยู่บนเครื่องผู้เรียน ส่วน LLM (8000) และ bge-m3 (8001) ใช้ตัวกลางบน server ผ่าน tunnel
+
+หัวข้อ "เริ่มใช้งานบน server" ด้านล่างเป็นวิธีเดิม (ทำงานบน server ผ่าน VS Code Remote-SSH) ไม่ต้องทำถ้ารันบนเครื่องตัวเอง
 
 ```
 src/cdd_rag/      โค้ดจริง (notebook, agent, service import จากที่นี่)
@@ -40,7 +49,7 @@ docs/
 data/raw/                  PDF + _manifest.csv (ประเภท/วันที่ของเอกสาร)
 ```
 
-## เริ่มใช้งาน (ผู้เรียน)
+## เริ่มใช้งานบน server (วิธีเดิม)
 
 ทุกคนใช้ server เครื่องเดียวกันผ่าน VS Code (Remote-SSH) แต่ละคนมี Qdrant ของตัวเอง
 ส่วน LLM (port 8000) และ bge-m3 (port 8001) ใช้ตัวกลางร่วมกันทั้งห้อง
